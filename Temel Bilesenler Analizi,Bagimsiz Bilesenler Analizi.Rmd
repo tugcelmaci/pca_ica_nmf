@@ -1,0 +1,377 @@
+---
+title: "Temel Bilesenler Analizi,Bagimsiz Bilesenler Analizi"
+author: "Aysun Aydoğdu Tuğçe Elmacı Dilek Aslan Ebru Aras"
+date: "7/5/2020"
+output:
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: kate
+    
+---
+
+```{r include=FALSE}
+library(knitr)
+opts_chunk$set(echo=TRUE,
+               cache=FALSE,autodep=TRUE,
+               message=FALSE, warning=FALSE)
+```
+
+
+# Temel Bilesenler Analizi
+
+```{r include=TRUE}
+library(dplyr)  
+library(FactoMineR) #PCA icin lullanilan paket.
+library(factoextra) #Grafikler icin gerekli paket.
+library(ggplot2)
+library(RColorBrewer) #Renklerin bulundugu paket
+library(fastICA) #ICA icin kullanilan paket
+library("MASS")
+
+```
+
+
+
+## Verinin Okutulması
+
+Kaynak:[(https://www.kaggle.com/uciml/breast-cancer-wisconsin-data)]
+
+```{r}
+data=read.csv("~/Desktop/ist.yazılım proje/cancer.csv")
+veri<-data[,-33]
+str(veri)
+```
+
+
+
+```{r}
+veri %>% dim
+```
+
+**Verimiz 32 degiskenden olusmaktadır.Temel bilesenleri çok değişkenli bir veri setinde boyut indirgemek kullanabilir.Bir de coklu dogrusallagi (multicollinearity) bulunan onlemek icin  kullanabiliriz.Temel bilesenleri sadece numerik degiskenlere uygulayabiliriz o yüzden id ve tani degiskenini almiyoruz.**
+
+
+
+# Temel Bilesenleri Olusturalım
+
+```{r message=TRUE, warning=TRUE}
+library(FactoMineR)
+pca <- prcomp(veri[c(3:32)], center = TRUE, scale = TRUE)
+summary(pca)
+```
+
+
+**Burada prcom komutuyla temel bilesenleri kolay bir sekilde hesaplayabildik.Bu komutla veriyi hem olcekleyip hemde merkezlemis oluyoruz.**
+
+
+
+**Pca ya bakarsak ozvektor ve ozdegerlerden olustugunu gorebiliriz.**
+
+```{r}
+#özvektor
+pca$rotation [,1:10] %>% head(1) 
+
+```
+
+```{r}
+pca$x[,1:10] %>% head(1) 
+```
+
+```{r}
+#sdev:özdeger
+pca$sdev
+```
+
+### Korelasyon grafigi cizdirirsek
+
+```{r plot1}
+plot1 <- cor(pca$x, method="pearson")
+corrplot::corrplot(plot1, method= "color", order = "hclust", tl.pos = 'n')
+```
+
+**Temel bilesenler dik oldugundan, hicbir korelasyon yoktur.** 
+**Korelasyon grafigi, otokorelasyon dısında beyazdir.**
+
+
+
+
+**Temel Bilesenleri bulduktan sonra varyansin ne kadar acıklandigina bakmak istiyoruz.**
+
+**Ana bilesen tarafindan aciklanan varyans orani (PVE) asagidaki denklem kullanilarak hesaplanir:**
+ 
+```{r}
+PVE <- (pca$sdev^2 / sum(pca$sdev^2))
+round(PVE, 2)
+```
+**1.temel bilesen  sadece verilerdeki toplam varyansın %44'unu olusturmaktadir.**
+**14. temel bilesenden son aciklanan varyans orani sifirdir Bu yuzden ilk 10 degisken icin  varyans oranına bakariz**
+
+```{r }
+library(factoextra)
+fviz_eig(pca, addlabels = TRUE, ylim = c(0, 50))
+```
+
+**İlk 10 bilesenlen varyansin %95 aciklayabiliriz.Bu cok iyi bir orandir ama 10 bilesen hala fazla bunu daha da indirgemek istiyoruz.** 
+
+
+
+
+### Kumulatif olarak bakarsak 
+
+```{r}
+Acıklananvaryans <- function(eigen) {
+
+par(mfrow = c(1,2))
+cumsum(pca$sdev^2 / sum(pca$sdev^2))
+plot(
+ pca$sdev^2 / sum(pca$sdev^2), pch = 21, col = 'black',
+ bg = '#549cc4', ylim = c(0, 1), xlab = 'Temel Bilesenler',
+ ylab = 'Acıklanan Varyans'
+ ) + abline(h = 0.9)
+
+plot(
+ cumsum(pca$sdev^2 / sum(pca$sdev^2)), pch = 21,
+ col = 'black', bg = '#549cc4', ylim = c(0, 1), xlab = 'Temel Bilesenler',
+ ylab = 'Acıklanan Kumulatif Varyans'
+ ) + abline(h = 0.9)
+}
+
+Acıklananvaryans(pca)
+```
+
+**Burdaki cizgi ozdegerlere gore cizilmistir ozdedegerin 1'den kucuk oldugu 0.9 degeri alinmistir.**
+ 
+**Baktigimizda ilk 6 bilesenin % 88.8'ını acikladigini goruruz.Bu bizim icin cok iyi durumdur varyansin sadece %10'nu kaybedip Boyutsallgi 30'dan 6'ya dusurmus oluyoruz.**
+
+
+
+
+```{r}
+PVE <- (pca$sdev^2 / sum(pca$sdev^2))
+round(PVE, 2)
+```
+
+#### 2 boyutta gorsellestirme yaparsak 
+
+```{r}
+
+fviz_pca_ind(pca, geom.ind = "point", pointshape = 21, 
+             pointsize = 2, 
+             fill.ind = veri$diagnosis, 
+             col.ind = "black", 
+             palette = "jco", 
+             addEllipses = TRUE,
+             label = "var",
+             col.var = "black",
+             repel = TRUE,
+             legend.title = "Tanı") +
+  ggtitle("2-Boyutlu PCA Grafigi") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+**Temel Bilesenleri kullanarak cok boyutlu verileri nasıl gorsellestirileceginin iyi bir ornegidir. Aslinda sadece bunlari kullanarak tum veri kumesindeki %63.3 (Dim1% 44.3 + Dim2%19) varyansi yakalariz. Orijinal verilerin herhangi bir anlamli sekilde cizilmesi imkansiz olan (30 ozellikten olustugu dikkate alindıginda) oldukca iyi iki temel bileşendir.**
+
+**Sadece ilk iki bilesenle iyi huylu ve kotu huylu tumorler arasinda bir miktar ayrim oldugunu acıkca görebiliriz.**
+
+**Bu verilerin bir tur siniflandirma modeli icin cok uygun oldugunun gostergesidir.**
+
+
+
+# Temel Bilesenlerle Yuz Tanima
+
+**Temel bilesen yuksek boyutlu verilerde kullanilir.Yuz tanıma icin ise buyuk bir matrisi sikistirip daha dusuk bir boyuta getirecegiz.**
+**Burada 32 × 32 faceData  matrisini kullanacagiz.**
+
+
+
+
+
+![Sekil 1: facedatamatrix](/Users/aysunaydogdu/Desktop/Resim1.png)
+
+
+
+#### Temel bilesenleri hesaplayalim
+
+
+```{r}
+load('~/Downloads/face.rda')
+runPCA <- function(mat = 'Unadjusted matrix') eigen(cov(apply(mat, 2, function(i) i - mean(i))))
+pca2 <- runPCA(faceData)
+```
+
+**Burada temel bilesenler hesaplanir veri stardartlastiilir.**
+
+
+
+#### Aciklanan varyans oranina bakmak istersek
+
+```{r}
+Aciklananvaryans2 <- function(eigenList) {
+
+par(mfrow = c(1,2))
+
+plot(
+ eigenList$value / sum(eigenList$value), pch = 21, col = 'black',
+ bg = '#549cc4', ylim = c(0, 1), xlab = 'Temel Bilesenler',
+ ylab = 'Acıklanan Varyans'
+ ) + abline(h = 0.9)
+
+plot(
+ cumsum(eigenList$value) / sum(eigenList$value), pch = 21,
+ col = 'black', bg = '#549cc4', ylim = c(0, 1), xlab = 'Temel Bilesenler',
+ ylab = 'Acıklanan Kumulatif Varyans'
+ ) + abline(h = 0.9)
+}
+
+Aciklananvaryans2(pca2)
+```
+
+
+
+
+**Bu grafiklerden, faceData'nın toplam varyansın kumulatif olarak % 90'ını aciklayan 5. temel bilesendir.**
+**Matrisi yeniden yapilandirarak ve orijinali ile karsilastirmak icin kullanalim.**
+
+
+
+
+```{r}
+afterPCA <- function(
+ matAdjust = 'Centered matrix',
+ meanList = 'List of column means of original (unadjusted) matrix',
+ eigenList = 'List of eigenvalues and eigenvectors of adjust matrix covariance matrix',
+ n = 'selected PC\'s',
+ specific_select = 'If True: n == 1:n, if False: just n\'th columns') {
+
+ if (length(n) > ncol(matAdjust)) stop('N is higher than the number of PC\'s')
+ if (!specific_select & length(n) > 1) stop('Use a single number when selecting up to n\'th PC')
+ if (!specific_select) n <- 1:n
+
+ t(eigenList$vectors[,n] %*% (t(eigenList$vectors[,n]) %*% t(matAdjust))) + t(matrix(meanList, nrow = nrow(matAdjust), ncol = ncol(matAdjust)))
+}
+
+
+showMatrix <- function(x, ...) image(t(x[nrow(x):1,]), xaxt = 'none', yaxt = 'none', col = rev(colorRampPalette(brewer.pal(7, 'Blues'))(100)), ...)
+
+reconstMatrix <- afterPCA(
+ matAdjust = apply(faceData, 2, function(i) i - mean(i)),
+ meanList = apply(faceData, 2, mean),
+ eigenList = pca2,
+ n = 5,
+ specific_select = FALSE
+)
+
+par(mfrow = c(1,2), mar = c(0, 0, 1, 0), bty = 'n')
+showMatrix(faceData, main = 'Original Matrix')
+showMatrix(reconstMatrix, main = 'First 5 PC\'s')
+```
+
+
+
+**Sonuca baktigimizda orjinal matrise cok yakin oldugunu gormekteyiz.5 temel bilesenlenle varyansin %90 aciklandigi icin  orjinal matrise cok yakin goruntu elde etmis olduk.**
+**Yuksek boyutlu verilerde alandan tassarruf etmek icin de kullanılır.**
+
+
+
+
+# Bagimsiz Bilesenler Analizi
+
+
+**İki Bagimsiz Tonu Dogrusal Karisimlarindan Cikarma**
+**Katki Gauss Gurultusunun Bozulmus Tonlarinin Uretilmesi**
+
+
+**ICA, bagimsiz kaynakları karısık bir sinyalden ayırmak icin kullanılan bir makine ögrenme teknigidir.**
+**Oncelikli olarak ICA bagimsiz bilesenlere odaklanır, uygulamamızda bagimsiz iki farklı ton olarak adlandirilabilecek iki farklı matris olusturuyoruz.**
+
+```{r message=TRUE, warning=TRUE}
+
+
+ton1=0.7*sin((1:1000)/19+0.57*pi) + MASS::mvrnorm(n = 1000, mu = 0, Sigma = 0.004) # Tone 1 corrupted by noise
+ton1 <- as.numeric(ton1)
+plot(ton1, main = "Katkı Gürültüsü - Bozuk Ton 1", xlab = "Zaman", ylab = "Genlik")
+```
+
+```{r message=TRUE, warning=TRUE}
+ton2=sin((1:1000)/33) + MASS::mvrnorm(n = 1000, mu = 0.03, Sigma = 0.005) # Tone 2 corrupted by noise
+ton2 <- as.numeric(ton2)
+plot(ton2, main = "Katkı Gürültüsü - Bozuk Ton 2", xlab = "Zaman", ylab = "Genlik")
+```
+
+
+**Olusturulan bagimsiz tonların ayni anda ciktigini varsaydigimizda farklı bir matris A tarafindan verilen konum ve ayarlara göre karisik iki farkli sinyal uretir. Uretilen iki farkli sinyali asagidaki gibi dogrusal karisik sinyal olarak belirtiyoruz. Aslinda üretilen ton1 ve ton2 iki farkli sinyal üretmiştir diyebiliriz.**
+
+# Deterministik Dogrusal Karıstırma
+
+```{r message=TRUE, warning=TRUE}
+signal1 <- ton1-2*ton2
+plot(signal1, xlab = "Zaman", ylab = "Genlik",col="gray34")+
+title(main = "Doğrusal Karışık Sinyal", sub = "Sinyal 1",
+      xlab = "Zaman", ylab = "Genlik",
+      cex.main = 1.3,   font.main= 4, col.main= "lightcoral",
+      cex.sub = 0.75, font.sub = 2, col.sub = "indianred3",
+      col.lab ="indianred3" )
+```
+
+```{r message=TRUE, warning=TRUE}
+signal2 <- 1.73*ton1 +3.41*ton2
+plot(signal2, xlab = "Zaman", ylab = "Genlik", col="gray34")+
+  title(main = "Dogrusal Karisik Sinyal", sub = "Sinyal 2",
+      xlab = "Zaman", ylab = "Genlik",
+      cex.main = 1.3,   font.main= 4, col.main= "lightcoral",
+      cex.sub = 0.75, font.sub = 3, col.sub = "lightpink4",
+      col.lab ="lightpink4"
+      )
+```
+
+**Karisik sinyaller(sinyal1 ve sinyal2) cikti olarak sinyal adini verdigimiz vektörü üretir.Buna kokteyl partisi sorunu diyoruz.**
+
+
+
+
+![Sekil2: Koktely Partisi Sorunu](/Users/aysunaydogdu/Desktop/Resim2.png)
+
+
+
+
+```{r}
+Signal <- t(rbind(signal1,signal2))
+```
+
+**imdi, ton1 ve ton2'yi sinyal1 ve sinyal2'den ayırmak istiyoruz. Bunun icin bagimsiz bilesen analizi yontemini kullaniyoruz.**
+
+
+# FastICA () kullanarak ICA gerceklestirme
+```{r}
+library(fastICA)
+
+b <- fastICA(Signal, 2, alg.typ = "parallel", fun = "logcosh", alpha = 1,
+method = "C", row.norm = FALSE, maxit = 200,
+tol = 0.0001, verbose = TRUE)
+
+str(b)
+```
+
+**Logcosh kullanarak simetrik FastICA yaklasimi entropi fonksiyonuna giris icin yineleme ciktilarimizi gorebiliriz. 3 farkli yineleme ciktisi vardir.**
+
+# Tahmini Ton ve Kaynak Sinyaller
+
+**ICA gerceklesmesinden sonra artik karisik iki tonun birbirinden nasil ayrildigini gözlemlemek icin bir grafik cizdiriyoruz. Grafikte gördügümüz gibi, Kirmizi ve mavi kaynak sinyalleri(yani, signal1 ve signal2'yi temsil ediyor.), yesil ve siyah ise tahmini tonları(yani, ton1 ve ton2'yi temsil etmektedir.) ifade etmektedir. Buradan anlasildigi üzere ICA yaklasimi ton1 ve ton2'yi dogru bir sekilde ayirmistir diyebiliriz.**
+
+```{r}
+
+plot(b$S[,1], col="olivedrab3", main = "Kaynak Sinyaller ve Tahmini Tonlar", xlab = "Zaman", ylab = "GEnlik") # first column of S_hat
+mtext("Kırmızı ve Mavi Kaynak Sinyaller, Yeşil ve Siyah Tahmini Tonlar")
+lines(ton1, col="red3")
+lines(b$S[,2], col="black") # second column of S_hat
+lines(ton2, col="lightslateblue")
+
+```
+
+
+
+
